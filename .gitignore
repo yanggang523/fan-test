@@ -275,4 +275,5 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,windows,python,c
+# End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,windows,python,csensor/v4l2loopback/
+sensor/v4l2loopback/
