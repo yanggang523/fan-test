@@ -89,3 +89,4 @@ def detect_gesture():
         cam_proc.terminate()
 
     return None
+'''

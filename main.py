@@ -2,7 +2,7 @@
 from motor.dc.dc_motor_wrapper import DCMotor
 from motor.step.step_control import rotate_step_motor
 from sensor.sr04 import get_distance
-from sensor.camera import detect_gesture
+##from sensor.camera import detect_gesture
 from config import DISTANCE_THRESHOLD
 
 import time
