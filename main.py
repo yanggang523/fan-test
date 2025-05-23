@@ -24,6 +24,7 @@ if __name__ == '__main__':
             dc_motor.decrease_speed()
 
         if distance < DISTANCE_THRESHOLD:
+            dc_motor.increase_speed()
             rotate_step_motor(200)
 
         time.sleep(0.5)
