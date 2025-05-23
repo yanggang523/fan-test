@@ -1,4 +1,5 @@
 import ctypes
+import os
 
 lib_path = os.path.join(os.path.dirname(__file__), "dc_control.so")
 lib = ctypes.CDLL(lib_path)
