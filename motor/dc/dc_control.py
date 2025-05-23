@@ -1,6 +1,7 @@
 import ctypes
 
-lib = ctypes.CDLL("./motor/dc_control.so")
+lib_path = os.path.join(os.path.dirname(__file__), "dc_control.so")
+lib = ctypes.CDLL(lib_path)
 
 class DCMotor:
     def __init__(self):
