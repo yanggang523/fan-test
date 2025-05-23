@@ -1,5 +1,5 @@
 ## This code controls a DC motor using the pigpio library.
-from motor.dc.dc_control import DCMotor
+from motor.dc.dc_motor_wrapper import DCMotor
 from motor.step.step_control import rotate_step_motor
 from sensor.sr04 import get_distance
 # from sensor.camera import detect_gesture
