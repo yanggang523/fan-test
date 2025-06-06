@@ -1,43 +1,48 @@
-#include <pigpio.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pigpio.h>
 
-#define DC_ENA 18
-#define DC_DIR 23
+#define PWM_PIN 18             // GPIO 18번 (hardware PWM)
+#define SPEED_FILE "/tmp/fan_speed.txt"
+#define MAX_DUTY 1000000       // pigpio는 0~100만 (1,000,000)
 
-static int duty_cycle = 128;
+int read_speed_from_file() {
+    FILE *fp = fopen(SPEED_FILE, "r");
+    if (fp == NULL) return -1;
 
-void setup_dc_motor() {
-    if (gpioInitialise() < 0) {
-        printf("[C] pigpio 초기화 실패\n");
-        return;
+    int speed;
+    if (fscanf(fp, "%d", &speed) != 1) {
+        fclose(fp);
+        return -1;
     }
-    gpioSetMode(DC_ENA, PI_OUTPUT);
-    gpioSetMode(DC_DIR, PI_OUTPUT);
-    printf("[C] DC 모터 GPIO 설정 완료\n");
+    fclose(fp);
+    return speed;
 }
 
-void start_motor() {
-    gpioPWM(DC_ENA, duty_cycle);
-    gpioWrite(DC_DIR, 1);
-    printf("[C] DC 모터 시작\n");
-}
+int main() {
+    if (gpioInitialise() < 0) {
+        fprintf(stderr, "pigpio 초기화 실패\n");
+        return 1;
+    }
 
-void stop_motor() {
-    gpioPWM(DC_ENA, 0);
-    printf("[C] DC 모터 정지\n");
-}
+    printf("💨 모터 제어 시작 (pigpio)\n");
 
-void increase_speed() {
-    duty_cycle += 32;
-    if (duty_cycle > 255) duty_cycle = 255;
-    gpioPWM(DC_ENA, duty_cycle);
-    printf("[C] 속도 증가: %d\n", duty_cycle);
-}
+    int current_speed = -1;
 
-void decrease_speed() {
-    duty_cycle -= 32;
-    if (duty_cycle < 0) duty_cycle = 0;
-    gpioPWM(DC_ENA, duty_cycle);
-    printf("[C] 속도 감소: %d\n", duty_cycle);
-}
+    while (1) {
+        int new_speed = read_speed_from_file();
+        if (new_speed >= 0 && new_speed <= 100) {
+            if (new_speed != current_speed) {
+                int duty = (int)(MAX_DUTY * new_speed / 100.0);
+                gpioHardwarePWM(PWM_PIN, 25000, duty);  // 25kHz PWM
+                current_speed = new_speed;
+                printf("PWM 속도 변경: %d%% (%d)\n", new_speed, duty);
+            }
+        }
+        usleep(200000);  // 200ms 대기
+    }
 
+    gpioTerminate();
+    return 0;
+}

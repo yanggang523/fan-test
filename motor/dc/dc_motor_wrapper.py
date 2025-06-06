@@ -1,21 +1,31 @@
-import ctypes
 import os
 
-lib_path = os.path.join(os.path.dirname(__file__), "dc_control.so")
-lib = ctypes.CDLL(lib_path)
+SPEED_FILE = "/tmp/fan_speed.txt"
 
 class DCMotor:
     def __init__(self):
-        lib.setup_dc_motor()
+        self.speed = 0
+        self.max_speed = 100
+        self.min_speed = 0
+        self.step = 10
+
+    def _write_speed(self):
+        with open(SPEED_FILE, 'w') as f:
+            f.write(str(self.speed))
 
     def start(self):
-        lib.start_motor()
+        if self.speed == 0:
+            self.speed = 30  # 초기 기본값
+        self._write_speed()
 
     def stop(self):
-        lib.stop_motor()
+        self.speed = 0
+        self._write_speed()
 
     def increase_speed(self):
-        lib.increase_speed()
+        self.speed = min(self.speed + self.step, self.max_speed)
+        self._write_speed()
 
     def decrease_speed(self):
-        lib.decrease_speed()
+        self.speed = max(self.speed - self.step, self.min_speed)
+        self._write_speed()

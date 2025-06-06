@@ -1,4 +1,3 @@
-'''
 import cv2
 import numpy as np
 import subprocess
@@ -89,4 +88,4 @@ def detect_gesture():
         cam_proc.terminate()
 
     return None
-'''
+
