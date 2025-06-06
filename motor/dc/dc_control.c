@@ -3,9 +3,11 @@
 #include <unistd.h>
 #include <pigpio.h>
 
-#define PWM_PIN 18             // GPIO 18번 (hardware PWM)
+#define DC_ENA 18  // PWM 핀
+#define DC_DIR 23  // 방향 제어 핀
 #define SPEED_FILE "/tmp/fan_speed.txt"
-#define MAX_DUTY 1000000       // pigpio는 0~100만 (1,000,000)
+
+static int duty_cycle = 0;
 
 int read_speed_from_file() {
     FILE *fp = fopen(SPEED_FILE, "r");
@@ -22,25 +24,29 @@ int read_speed_from_file() {
 
 int main() {
     if (gpioInitialise() < 0) {
-        fprintf(stderr, "pigpio 초기화 실패\n");
+        fprintf(stderr, "[C] pigpio 초기화 실패\n");
         return 1;
     }
 
-    printf("💨 모터 제어 시작 (pigpio)\n");
+    gpioSetMode(DC_ENA, PI_OUTPUT);
+    gpioSetMode(DC_DIR, PI_OUTPUT);
+    gpioWrite(DC_DIR, 1);  // 기본 방향 설정
 
-    int current_speed = -1;
+    printf("[C] DC 모터 제어 시작\n");
+
+    int current_duty = -1;
 
     while (1) {
-        int new_speed = read_speed_from_file();
+        int new_speed = read_speed_from_file();  // 0~100
         if (new_speed >= 0 && new_speed <= 100) {
-            if (new_speed != current_speed) {
-                int duty = (int)(MAX_DUTY * new_speed / 100.0);
-                gpioHardwarePWM(PWM_PIN, 25000, duty);  // 25kHz PWM
-                current_speed = new_speed;
-                printf("PWM 속도 변경: %d%% (%d)\n", new_speed, duty);
+            int new_duty = (int)(255.0 * new_speed / 100.0);  // 0~255 변환
+            if (new_duty != current_duty) {
+                gpioPWM(DC_ENA, new_duty);  // 소프트 PWM 사용
+                current_duty = new_duty;
+                printf("[C] 속도 갱신: %d%% (%d/255)\n", new_speed, new_duty);
             }
         }
-        usleep(200000);  // 200ms 대기
+        usleep(200000);  // 200ms 간격
     }
 
     gpioTerminate();
