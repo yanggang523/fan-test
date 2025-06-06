@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 #define DC_ENA 18
-#define DC_DIR 23
+#define DC_DIR 23 
 
 static int duty_cycle = 128;
 
