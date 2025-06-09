@@ -2,7 +2,7 @@ from motor.dc.dc_motor_wrapper import DCMotor
 from motor.step.step_control import rotate_step_motor_to
 from sensor.sr04 import detect_direction, get_distance
 from sensor.camera import detect_gesture
-from config import DISTANCE_THRESHOLD
+from config import DISTANCE_THRESHOLD, ULTRASONIC_SENSORS
 
 import time
 
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     while True:
         gesture = detect_gesture()
         direction = detect_direction()
-        distance = get_distance()  # 중앙 센서 기준
+        distance = get_distance(**ULTRASONIC_SENSORS['center'])
 
         if distance != -1:
             print(f"[INFO] 거리 측정: {distance:.2f} cm")
