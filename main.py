@@ -14,8 +14,8 @@ if __name__ == '__main__':
     while True:
         gesture = detect_gesture()
         direction = detect_direction()
-        distance = get_distance(**ULTRASONIC_SENSORS['center'])
-
+        distance = get_distance(trig_pin=ULTRASONIC_SENSORS['center']['TRIG'],
+                                echo_pin=ULTRASONIC_SENSORS['center']['ECHO'])
         if distance != -1:
             print(f"[INFO] 거리 측정: {distance:.2f} cm")
         else:
