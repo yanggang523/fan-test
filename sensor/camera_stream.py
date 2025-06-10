@@ -2,19 +2,18 @@
 
 import subprocess
 import numpy as np
-import cv2
 
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
 def start_stream():
-    # FFmpeg: stdin으로 YUV420p 입력 받고 → BGR 포맷으로 stdout 출력
     ffmpeg_proc = subprocess.Popen(
         [
             'ffmpeg',
             '-f', 'rawvideo',
             '-pix_fmt', 'yuv420p',
             '-s', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',
+            '-framerate', '30', 
             '-i', '-',
             '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
@@ -26,7 +25,6 @@ def start_stream():
         bufsize=0
     )
 
-    # libcamera-vid: 카메라에서 YUV420p raw 영상 출력
     cam_proc = subprocess.Popen(
         [
             'libcamera-vid',
@@ -35,6 +33,7 @@ def start_stream():
             '--height', str(FRAME_HEIGHT),
             '--codec', 'yuv420',
             '--nopreview',
+            '--framerate', '30',  
             '-o', '-'
         ],
         stdout=ffmpeg_proc.stdin,
@@ -45,8 +44,8 @@ def start_stream():
 
 def read_frame(ffmpeg_proc):
     raw = ffmpeg_proc.stdout.read(FRAME_WIDTH * FRAME_HEIGHT * 3)
-    if not raw:
-        print("[DEBUG] FFmpeg로부터 프레임을 받지 못함")
+    if not raw or len(raw) != FRAME_WIDTH * FRAME_HEIGHT * 3:
+        print(f"[DEBUG] 프레임 크기 불일치: {len(raw)} bytes")
         return None
     try:
         frame = np.frombuffer(raw, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 3))
