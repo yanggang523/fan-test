@@ -40,6 +40,8 @@ def start_stream():
 
     return ffmpeg_proc, cam_proc
 
+
+
 def read_frame(ffmpeg_proc):
     expected_size = FRAME_WIDTH * FRAME_HEIGHT * 3
     print(f"[DEBUG] 프레임 읽기 시도... (예상: {expected_size} bytes)")
@@ -49,20 +51,19 @@ def read_frame(ffmpeg_proc):
     if not raw or len(raw) != expected_size:
         print(f"[DEBUG] 프레임 크기 불일치: {len(raw)} bytes (예상: {expected_size})")
 
-        # 🔽 ffmpeg stderr 출력 시도
+        # 🔥 ffmpeg 전체 stderr 출력
         if ffmpeg_proc.stderr:
             try:
-                err = ffmpeg_proc.stderr.readline().decode(errors='ignore')
-                print(f"[FFMPEG-ERROR] {err.strip()}")
+                stderr_output = ffmpeg_proc.stderr.read().decode(errors='ignore')
+                print(f"[FFMPEG-ERROR FULL LOG]\n{stderr_output.strip()}")
             except Exception as e:
                 print(f"[FFMPEG-ERROR] stderr 읽기 실패: {e}")
-
         return None
 
     try:
+        print(f"[DEBUG] 프레임 읽음: {len(raw)} bytes")
         frame = np.frombuffer(raw, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 3))
         return frame
     except Exception as e:
         print(f"[ERROR] 프레임 변환 실패: {e}")
         return None
-
