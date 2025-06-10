@@ -4,9 +4,11 @@ from config import ULTRASONIC_SENSORS
 
 GPIO.setmode(GPIO.BCM)
 
-for sensor in ULTRASONIC_SENSORS.values():
-    GPIO.setup(sensor['TRIG'], GPIO.OUT)
-    GPIO.setup(sensor['ECHO'], GPIO.IN)
+def setup_ultrasonic_sensors():
+    for sensor in ULTRASONIC_SENSORS.values():
+        GPIO.setup(sensor['TRIG'], GPIO.OUT)
+        GPIO.setup(sensor['ECHO'], GPIO.IN)
+
 
 def get_distance(trig_pin, echo_pin):
     GPIO.output(trig_pin, True)

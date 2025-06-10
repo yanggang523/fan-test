@@ -4,13 +4,18 @@ from sensor.sr04 import detect_direction, get_distance
 from sensor.camera import detect_gesture
 from sensor.camera_stream import start_stream
 from config import DISTANCE_THRESHOLD, ULTRASONIC_SENSORS, Gesture
+from sensor.sr04 import setup_ultrasonic_sensors
+import RPi.GPIO as GPIO
 
 import time
 
 if __name__ == '__main__':
+    GPIO.setmode(GPIO.BCM)  
+    setup_ultrasonic_sensors()  
     dc_motor = DCMotor()
     prev_gesture = None
     hold_counter = 0
+    
 
     ffmpeg_proc, cam_proc = start_stream()
 
