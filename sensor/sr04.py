@@ -2,7 +2,7 @@ import RPi.GPIO as GPIO
 import time
 from config import ULTRASONIC_SENSORS
 
-GPIO.setmode(GPIO.BCM)
+# GPIO.setmode(GPIO.BCM)
 
 def setup_ultrasonic_sensors():
     for sensor in ULTRASONIC_SENSORS.values():
