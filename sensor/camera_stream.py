@@ -8,15 +8,14 @@ FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
 def start_stream():
-    # ffmpeg: mjpeg → bgr24 로 변환
     ffmpeg_proc = subprocess.Popen(
         [
             'ffmpeg',
             '-f', 'mjpeg',
+            '-video_size', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',  # 🔥 중요
             '-i', '-',
             '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
-            '-s', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',
             '-'
         ],
         stdin=subprocess.PIPE,
@@ -24,6 +23,7 @@ def start_stream():
         stderr=subprocess.DEVNULL,
         bufsize=0
     )
+
 
     # libcamera-vid: 카메라에서 MJPEG 스트림 출력
     cam_proc = subprocess.Popen(
