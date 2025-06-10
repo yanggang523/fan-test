@@ -2,22 +2,21 @@
 
 import subprocess
 import numpy as np
+import cv2
 
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
 def start_stream():
-    # FFmpeg: yuyv422 (픽셀당 2바이트) → BGR로 변환
+    # ffmpeg: mjpeg → bgr24 로 변환
     ffmpeg_proc = subprocess.Popen(
         [
             'ffmpeg',
-            '-f', 'rawvideo',
-            '-pix_fmt', 'yuyv422',
-            '-s', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',
-            '-framerate', '30',
+            '-f', 'mjpeg',
             '-i', '-',
             '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
+            '-s', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',
             '-'
         ],
         stdin=subprocess.PIPE,
@@ -26,14 +25,14 @@ def start_stream():
         bufsize=0
     )
 
-    # libcamera-vid: 카메라에서 yuv422 raw 영상 출력
+    # libcamera-vid: 카메라에서 MJPEG 스트림 출력
     cam_proc = subprocess.Popen(
         [
             'libcamera-vid',
             '-t', '0',
             '--width', str(FRAME_WIDTH),
             '--height', str(FRAME_HEIGHT),
-            '--codec', 'yuv422',
+            '--codec', 'mjpeg',
             '--framerate', '30',
             '--nopreview',
             '-o', '-'
@@ -45,7 +44,7 @@ def start_stream():
     return ffmpeg_proc, cam_proc
 
 def read_frame(ffmpeg_proc):
-    expected_size = FRAME_WIDTH * FRAME_HEIGHT * 3  # BGR은 픽셀당 3바이트
+    expected_size = FRAME_WIDTH * FRAME_HEIGHT * 3  # BGR: 3 bytes per pixel
     raw = ffmpeg_proc.stdout.read(expected_size)
     if not raw or len(raw) != expected_size:
         print(f"[DEBUG] 프레임 크기 불일치: {len(raw)} bytes (예상: {expected_size})")
