@@ -39,7 +39,7 @@ def detect_gesture(ffmpeg_proc):
     if results.multi_hand_landmarks:
         hand_landmarks = results.multi_hand_landmarks[0]
         fingers = get_finger_states(hand_landmarks)
-
+        print(f"[DEBUG] 손가락 상태: {fingers}")    
         if fingers == [False, True, False, False, False]:
             print("[INFO] THUMBS_UP")
             return Gesture.THUMBS_UP
@@ -53,6 +53,6 @@ def detect_gesture(ffmpeg_proc):
         elif fingers == [True, True, True, True, True]:
             print("[INFO] PALM")
             return Gesture.PALM
-
+    print("[DEBUG] 손 인식 실패") 
     return None
 
