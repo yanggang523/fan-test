@@ -8,6 +8,7 @@ FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
 def start_stream():
+    # FFmpeg: stdin으로 YUV420p 입력 받고 → BGR 포맷으로 stdout 출력
     ffmpeg_proc = subprocess.Popen(
         [
             'ffmpeg',
@@ -20,9 +21,12 @@ def start_stream():
             '-'
         ],
         stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        bufsize=0
     )
 
+    # libcamera-vid: 카메라에서 YUV420p raw 영상 출력
     cam_proc = subprocess.Popen(
         [
             'libcamera-vid',
@@ -33,7 +37,8 @@ def start_stream():
             '--nopreview',
             '-o', '-'
         ],
-        stdout=ffmpeg_proc.stdin
+        stdout=ffmpeg_proc.stdin,
+        stderr=subprocess.DEVNULL
     )
 
     return ffmpeg_proc, cam_proc
