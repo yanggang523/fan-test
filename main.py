@@ -70,3 +70,4 @@ if __name__ == '__main__':
     finally:
         ffmpeg_proc.terminate()
         cam_proc.terminate()
+        GPIO.cleanup()
