@@ -41,6 +41,11 @@ def start_stream():
 def read_frame(ffmpeg_proc):
     raw = ffmpeg_proc.stdout.read(FRAME_WIDTH * FRAME_HEIGHT * 3)
     if not raw:
+        print("[DEBUG] FFmpeg로부터 프레임을 받지 못함")
         return None
-    frame = np.frombuffer(raw, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 3))
-    return frame
+    try:
+        frame = np.frombuffer(raw, dtype=np.uint8).reshape((FRAME_HEIGHT, FRAME_WIDTH, 3))
+        return frame
+    except Exception as e:
+        print(f"[ERROR] 프레임 변환 실패: {e}")
+        return None
