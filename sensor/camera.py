@@ -26,7 +26,9 @@ def is_thumb_down(hand_landmarks):
     tip = hand_landmarks.landmark[4]  # Thumb tip
     mcp = hand_landmarks.landmark[2]  # Thumb MCP
     return tip.y > mcp.y
+
 def detect_gesture(ffmpeg_proc):
+    print("[DEBUG] detect_gesture() 진입")
     frame = read_frame(ffmpeg_proc)
     if frame is None:
         return None
