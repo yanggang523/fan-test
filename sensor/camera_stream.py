@@ -2,7 +2,6 @@
 
 import subprocess
 import numpy as np
-import cv2
 
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
@@ -12,20 +11,18 @@ def start_stream():
         [
             'ffmpeg',
             '-f', 'mjpeg',
-            '-video_size', f'{FRAME_WIDTH}x{FRAME_HEIGHT}',  # 🔥 중요
             '-i', '-',
+            '-vf', f'scale={FRAME_WIDTH}:{FRAME_HEIGHT}',  # 명확한 리사이즈
             '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
             '-'
         ],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        bufsize=0
+        stderr=subprocess.PIPE,   # DEVNULL → PIPE로 잠시 변경해 디버깅 가능하게
+        bufsize=10**8             # 충분히 큰 버퍼
     )
 
-
-    # libcamera-vid: 카메라에서 MJPEG 스트림 출력
     cam_proc = subprocess.Popen(
         [
             'libcamera-vid',
@@ -44,7 +41,7 @@ def start_stream():
     return ffmpeg_proc, cam_proc
 
 def read_frame(ffmpeg_proc):
-    expected_size = FRAME_WIDTH * FRAME_HEIGHT * 3  # BGR: 3 bytes per pixel
+    expected_size = FRAME_WIDTH * FRAME_HEIGHT * 3
     raw = ffmpeg_proc.stdout.read(expected_size)
     if not raw or len(raw) != expected_size:
         print(f"[DEBUG] 프레임 크기 불일치: {len(raw)} bytes (예상: {expected_size})")
