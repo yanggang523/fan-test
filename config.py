@@ -9,7 +9,7 @@ DISTANCE_THRESHOLD = 40
 
 # 3개 초음파 센서 GPIO 핀 (BCM 기준)
 ULTRASONIC_SENSORS = {
-    'left':   {'TRIG': 17, 'ECHO': 27},
+    'left':   {'TRIG': 17, 'ECHO': 25},
     'center': {'TRIG': 22, 'ECHO': 10},
     'right':  {'TRIG': 9,  'ECHO': 11},
 }
