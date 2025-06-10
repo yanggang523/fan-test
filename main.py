@@ -46,7 +46,7 @@ if __name__ == '__main__':
                     hold_counter = 1
 
                 # 1.5초마다 속도 증가 (0.3s × 5)
-                if hold_counter % 5 == 0 and dc_motor.duty_cycle < 255:
+                if hold_counter % 5 == 0 and dc_motor.speed < dc_motor.max_speed:
                     dc_motor.increase_speed()
             elif gesture == Gesture.FIST:
                 dc_motor.decrease_speed()
@@ -69,7 +69,7 @@ if __name__ == '__main__':
             # 거리 기반 자동 팬 반응 (단, 속도 제한)
             if center_distance != -1 and center_distance < DISTANCE_THRESHOLD:
                 print("[INFO] 거리 기준 이하 → 팬 반응")
-                if dc_motor.duty_cycle < 255:
+                if dc_motor.speed  < dc_motor.max_speed:
                     dc_motor.increase_speed()
 
             time.sleep(0.3)
