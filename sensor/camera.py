@@ -34,17 +34,28 @@ def get_finger_states(hand_landmarks, handedness, threshold=0.02):
 def is_thumb_down(hand_landmarks):
     tip = hand_landmarks.landmark[4]
     mcp = hand_landmarks.landmark[2]
-    return tip.y > mcp.y and abs(tip.x - mcp.x) < 0.2
+    wrist = hand_landmarks.landmark[0]
+    vertical = tip.y > mcp.y and tip.y > wrist.y
+    horizontal = abs(tip.x - mcp.x) < 0.15
+    return vertical and horizontal
+
+def is_hand_small(hand_landmarks):
+    wrist = hand_landmarks.landmark[0]
+    tip = hand_landmarks.landmark[8]
+    dx = tip.x - wrist.x
+    dy = tip.y - wrist.y
+    distance = np.sqrt(dx * dx + dy * dy)
+    return distance < 0.15
 
 def classify_finger_pattern(fingers, hand_landmarks):
     up_count = fingers.count(True)
-    if fingers[1] and not any(fingers[2:]):
+
+    if fingers[0] and up_count <= 2:
         return Gesture.THUMBS_UP
-    elif up_count == 0:
-        if is_thumb_down(hand_landmarks):
-            return Gesture.THUMBS_DOWN
-        else:
-            return Gesture.FIST
+    elif is_thumb_down(hand_landmarks) and up_count <= 1:
+        return Gesture.THUMBS_DOWN
+    elif up_count <= 1 and is_hand_small(hand_landmarks):
+        return Gesture.FIST
     elif up_count >= 4:
         return Gesture.PALM
     else:
@@ -70,7 +81,6 @@ def detect_gesture(ffmpeg_proc, debug=False, threshold=0.02):
         fingers = get_finger_states(hand_landmarks, handedness, threshold)
         gesture = classify_finger_pattern(fingers, hand_landmarks)
 
-        # ✅ 터미널 로그 출력
         print(f"[INFO] 손[{i}] 방향: {label}, 손가락 상태: {fingers}")
         if gesture:
             print(f"[INFO] 손[{i}] 인식된 제스처: {gesture.name}")
