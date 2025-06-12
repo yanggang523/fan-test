@@ -1,9 +1,11 @@
 import cv2
 import numpy as np
+from collections import deque
 from config import Gesture
 from sensor.camera_stream import start_stream, read_frame
 import mediapipe as mp
 
+# Mediapipe Hands 초기화
 mp_hands = mp.solutions.hands
 hands = mp_hands.Hands(
     static_image_mode=False,
@@ -12,89 +14,146 @@ hands = mp_hands.Hands(
 )
 drawing = mp.solutions.drawing_utils
 
-def get_finger_states(hand_landmarks, handedness, threshold=0.02):
-    fingers = []
-    TIP_IDS = [4, 8, 12, 16, 20]
-    PIP_IDS = [2, 6, 10, 14, 18]
+#— Temporal Smoothing 히스토리(최근 7프레임)
+gesture_history = deque(maxlen=7)
+
+#— 파라미터 설정
+BASE_RATIO      = 0.15   # 동적 임계값 계산 시 비율
+ANGLE_THRESHOLD = 60.0   # 관절 각도 기준(도)
+
+def calc_dynamic_threshold(hand_landmarks, base_ratio=BASE_RATIO):
+    """손바닥 너비 기반 동적 임계값 계산"""
+    p1 = hand_landmarks.landmark[2]   # 엄지 PIP
+    p2 = hand_landmarks.landmark[17]  # 새끼 PIP
+    palm_width = np.hypot(p1.x - p2.x, p1.y - p2.y)
+    return palm_width * base_ratio
+
+def angle(a, b, c):
+    """세 점 a–b–c 의 내각(도) 계산"""
+    v1 = np.array([a.x - b.x, a.y - b.y])
+    v2 = np.array([c.x - b.x, c.y - b.y])
+    cosv = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-6)
+    return np.degrees(np.arccos(np.clip(cosv, -1, 1)))
+
+def is_finger_open(hand_landmarks, tip_id, pip_id, mcp_id, angle_thresh=ANGLE_THRESHOLD, coord_thresh=0.0):
+    """
+    관절 각도 또는 좌표 차이 둘 중 하나라도 기준 이상이면 '펴짐'으로 간주
+    coord_thresh: (pip.y - tip.y) 같은 좌표 차이 임계값
+    """
+    lm_tip = hand_landmarks.landmark[tip_id]
+    lm_pip = hand_landmarks.landmark[pip_id]
+    lm_mcp = hand_landmarks.landmark[mcp_id]
+
+    ang = angle(lm_mcp, lm_pip, lm_tip)
+    coord = (lm_pip.y - lm_tip.y)
+    return (ang > angle_thresh) or (coord > coord_thresh)
+
+def get_finger_states(hand_landmarks, handedness):
+    """
+    5개 손가락 상태(True=펴짐, False=구부림) 반환
+    엄지는 x 좌표 차이 + 각도, 나머지는 angle + 동적 coord_thresh 사용
+    """
+    dynamic_thresh = calc_dynamic_threshold(hand_landmarks)
     is_right = handedness.classification[0].label == "Right"
 
-    for i in range(5):
-        tip = hand_landmarks.landmark[TIP_IDS[i]]
-        pip = hand_landmarks.landmark[PIP_IDS[i]]
+    states = []
+    # 엄지: TIP=4, PIP=2, MCP=2 (PIP 대신 MCP로 angle 계산)
+    lm_tip, lm_pip = hand_landmarks.landmark[4], hand_landmarks.landmark[2]
+    coord_thresh_thumb = dynamic_thresh
+    # 엄지 좌표 차이
+    coord_thumb = (lm_tip.x - lm_pip.x) if is_right else (lm_pip.x - lm_tip.x)
+    # 엄지 각도: MCP(2)-PIP(2)-TIP(4)
+    ang_thumb = angle(hand_landmarks.landmark[1],  # MCP
+                    hand_landmarks.landmark[2],  # PIP
+                    hand_landmarks.landmark[4])
+    states.append((coord_thumb > coord_thresh_thumb) or (ang_thumb > ANGLE_THRESHOLD))
 
-        if i == 0:  # 엄지
-            if is_right:
-                fingers.append((tip.x - pip.x) > threshold)
-            else:
-                fingers.append((pip.x - tip.x) > threshold)
-        else:
-            fingers.append((pip.y - tip.y) > threshold)
-    return fingers
+    # 검지~소지
+    TIP_IDS = [8, 12, 16, 20]
+    PIP_IDS = [6, 10, 14, 18]
+    MCP_IDS = [5, 9, 13, 17]
+    for tip, pip, mcp in zip(TIP_IDS, PIP_IDS, MCP_IDS):
+        states.append(is_finger_open(
+            hand_landmarks,
+            tip_id=tip,
+            pip_id=pip,
+            mcp_id=mcp,
+            angle_thresh=ANGLE_THRESHOLD,
+            coord_thresh=dynamic_thresh
+        ))
+    return states  # [thumb, index, middle, ring, pinky]
 
 def is_thumb_down(hand_landmarks):
     tip = hand_landmarks.landmark[4]
     mcp = hand_landmarks.landmark[2]
-    wrist = hand_landmarks.landmark[0]
-    vertical = tip.y > mcp.y and tip.y > wrist.y
-    horizontal = abs(tip.x - mcp.x) < 0.15
-    return vertical and horizontal
+    return (tip.y > mcp.y) and (abs(tip.x - mcp.x) < 0.2)
 
-def is_hand_small(hand_landmarks):
-    wrist = hand_landmarks.landmark[0]
-    tip = hand_landmarks.landmark[8]
-    dx = tip.x - wrist.x
-    dy = tip.y - wrist.y
-    distance = np.sqrt(dx * dx + dy * dy)
-    return distance < 0.15
-
-def classify_finger_pattern(fingers, hand_landmarks):
-    up_count = fingers.count(True)
-
-    if fingers[0] and up_count <= 2:
+def classify_gesture_from_states(states, hand_landmarks):
+    """finger states 기반으로 기본 제스처(UP/DOWN/FIST) 분류"""
+    # 👍 THUMBS_UP: 검지만 펴짐
+    if states[1] and not any(states[2:]):
         return Gesture.THUMBS_UP
-    elif is_thumb_down(hand_landmarks) and up_count <= 1:
-        return Gesture.THUMBS_DOWN
-    elif up_count <= 1 and is_hand_small(hand_landmarks):
-        return Gesture.FIST
-    elif up_count >= 4:
-        return Gesture.PALM
-    else:
-        return None
+    # ✊ FIST or 👎 THUMBS_DOWN
+    if sum(states) == 0:
+        return Gesture.THUMBS_DOWN if is_thumb_down(hand_landmarks) else Gesture.FIST
+    return None
 
-def detect_gesture(ffmpeg_proc, debug=False, threshold=0.02):
+def smooth_gesture(raw):
+    """히스토리 기반 다수결+연속 3회 안정화"""
+    gesture_history.append(raw)
+    most_common = max(set(gesture_history), key=gesture_history.count)
+    if most_common is not None and gesture_history.count(most_common) >= 3:
+        return most_common
+    return None
+
+def detect_gesture(ffmpeg_proc, debug=False):
     frame = read_frame(ffmpeg_proc)
     if frame is None:
-        print("[WARN] 프레임 없음")
         return None
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(rgb)
-
-    if not results.multi_hand_landmarks or not results.multi_handedness:
-        print("[DEBUG] 손 미검출")
+    if not results.multi_hand_landmarks:
         return None
 
-    gestures_detected = []
-
-    for i, (hand_landmarks, handedness) in enumerate(zip(results.multi_hand_landmarks, results.multi_handedness)):
+    raw_gesture = None
+    for i, (lm, handedness) in enumerate(zip(results.multi_hand_landmarks, results.multi_handedness)):
         label = handedness.classification[0].label
-        fingers = get_finger_states(hand_landmarks, handedness, threshold)
-        gesture = classify_finger_pattern(fingers, hand_landmarks)
+        states = get_finger_states(lm, handedness)
 
-        print(f"[INFO] 손[{i}] 방향: {label}, 손가락 상태: {fingers}")
-        if gesture:
-            print(f"[INFO] 손[{i}] 인식된 제스처: {gesture.name}")
-            gestures_detected.append(gesture)
+        # 👋 PALM 엄격 인식: 5개 모두 열려야
+        if all(states):
+            candidate = Gesture.PALM
         else:
-            print(f"[INFO] 손[{i}] 제스처 인식 실패")
+            candidate = classify_gesture_from_states(states, lm)
+
+        raw_gesture = candidate or raw_gesture
+
+        # 로그
+        print(f"[INFO] 손[{i}] 방향={label}, 상태={states}, 후보제스처={candidate}")
 
         if debug:
-            drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-            cv2.putText(frame, f"{label}: {fingers}", (10, 30 + 30 * i),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            drawing.draw_landmarks(frame, lm, mp_hands.HAND_CONNECTIONS)
+            cv2.putText(frame, f"{label}:{states}",
+                        (10, 30 + 30*i),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
 
     if debug:
-        cv2.imshow("Gesture Debug", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("Gesture Debug", frame)
+        # cv2.waitKey(1)
+        pass
 
-    return gestures_detected[0] if gestures_detected else None
+    # Temporal smoothing 적용
+    return smooth_gesture(raw_gesture)
+
+if __name__ == "__main__":
+    ffmpeg_proc, cam_proc = start_stream()
+    try:
+        while True:
+            g = detect_gesture(ffmpeg_proc, debug=True)
+            if g:
+                print(f"[STABLE] 확정 제스처: {g.name}")
+                # ⇒ 여기에 모터 제어 로직 연결
+    finally:
+        ffmpeg_proc.terminate()
+        cam_proc.terminate()
