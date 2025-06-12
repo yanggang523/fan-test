@@ -89,13 +89,27 @@ def is_thumb_down(hand_landmarks):
     return (tip.y > mcp.y) and (abs(tip.x - mcp.x) < 0.2)
 
 def classify_gesture_from_states(states, hand_landmarks):
-    """finger states 기반으로 기본 제스처(UP/DOWN/FIST) 분류"""
-    # 👍 THUMBS_UP: 검지만 펴짐
-    if states[1] and not any(states[2:]):
-        return Gesture.THUMBS_UP
-    # ✊ FIST or 👎 THUMBS_DOWN
+    """
+    states = [thumb, index, middle, ring, pinky]
+    엄지만 폈을 때:
+      - thumbs up: 엄지 TIP.y < min(나머지 4 fingers TIP.y)
+      - thumbs down: 엄지 TIP.y > max(나머지 4 fingers TIP.y)
+    """
+    # 오직 엄지만 폈는지 확인
+    if states[0] and not any(states[1:]):
+        tips = hand_landmarks.landmark
+        thumb_y = tips[4].y
+        other_ys = [tips[i].y for i in (8,12,16,20)]
+        
+        if thumb_y < min(other_ys):
+            return Gesture.THUMBS_UP
+        if thumb_y > max(other_ys):
+            return Gesture.THUMBS_DOWN
+
+    # 모두 접혔을 때만 완전 주먹(FIST)
     if sum(states) == 0:
-        return Gesture.THUMBS_DOWN if is_thumb_down(hand_landmarks) else Gesture.FIST
+        return Gesture.FIST
+
     return None
 
 def smooth_gesture(raw):
