@@ -21,14 +21,12 @@ gesture_history = deque(maxlen=7)
 BASE_RATIO      = 0.15   # 동적 임계값 계산 시 비율
 ANGLE_THRESHOLD = 60.0   # 관절 각도 기준(도)
 
-
 def calc_dynamic_threshold(hand_landmarks, base_ratio=BASE_RATIO):
     """손바닥 너비 기반 동적 임계값 계산"""
     p1 = hand_landmarks.landmark[2]   # 엄지 PIP
     p2 = hand_landmarks.landmark[17]  # 새끼 PIP
     palm_width = np.hypot(p1.x - p2.x, p1.y - p2.y)
     return palm_width * base_ratio
-
 
 def angle(a, b, c):
     """세 점 a–b–c 의 내각(도) 계산"""
@@ -37,10 +35,10 @@ def angle(a, b, c):
     cosv = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-6)
     return np.degrees(np.arccos(np.clip(cosv, -1, 1)))
 
-
 def is_finger_open(hand_landmarks, tip_id, pip_id, mcp_id, angle_thresh=ANGLE_THRESHOLD, coord_thresh=0.0):
     """
-    관절 각도와 좌표 차이 모두 기준 이상일 때만 '펴짐'으로 간주
+    관절 각도 또는 좌표 차이 둘 중 하나라도 기준 이상이면 '펴짐'으로 간주
+    coord_thresh: (pip.y - tip.y) 같은 좌표 차이 임계값
     """
     lm_tip = hand_landmarks.landmark[tip_id]
     lm_pip = hand_landmarks.landmark[pip_id]
@@ -48,22 +46,7 @@ def is_finger_open(hand_landmarks, tip_id, pip_id, mcp_id, angle_thresh=ANGLE_TH
 
     ang = angle(lm_mcp, lm_pip, lm_tip)
     coord = (lm_pip.y - lm_tip.y)
-    return (ang > angle_thresh) and (coord > coord_thresh)
-
-
-def is_fist_by_distance(hand_landmarks, tip_ids=[4, 8, 12, 16, 20]):
-    """
-    손목과 손끝 거리 기반으로 완전 주먹(FIST) 판단
-    """
-    wrist = hand_landmarks.landmark[0]
-    thresh = calc_dynamic_threshold(hand_landmarks) * 1.2
-    for tid in tip_ids:
-        tip = hand_landmarks.landmark[tid]
-        dist = np.hypot(tip.x - wrist.x, tip.y - wrist.y)
-        if dist > thresh:
-            return False
-    return True
-
+    return (ang > angle_thresh) or (coord > coord_thresh)
 
 def get_finger_states(hand_landmarks, handedness):
     """
@@ -76,13 +59,14 @@ def get_finger_states(hand_landmarks, handedness):
     states = []
     # 엄지: TIP=4, PIP=2, MCP 대용으로 PIP(2) 사용
     lm_tip, lm_pip = hand_landmarks.landmark[4], hand_landmarks.landmark[2]
+    coord_thresh_thumb = dynamic_thresh
     coord_thumb = (lm_tip.x - lm_pip.x) if is_right else (lm_pip.x - lm_tip.x)
     ang_thumb = angle(
         hand_landmarks.landmark[1],  # MCP
         hand_landmarks.landmark[2],  # PIP
         hand_landmarks.landmark[4]   # TIP
     )
-    states.append((coord_thumb > dynamic_thresh) and (ang_thumb > ANGLE_THRESHOLD))
+    states.append((coord_thumb > coord_thresh_thumb) or (ang_thumb > ANGLE_THRESHOLD))
 
     # 검지~소지
     TIP_IDS = [8, 12, 16, 20]
@@ -99,39 +83,41 @@ def get_finger_states(hand_landmarks, handedness):
         ))
     return states  # [thumb, index, middle, ring, pinky]
 
-
 def is_thumb_down(hand_landmarks):
     tip = hand_landmarks.landmark[4]
     mcp = hand_landmarks.landmark[2]
     return (tip.y > mcp.y) and (abs(tip.x - mcp.x) < 0.2)
 
-
 def is_thumb_up(hand_landmarks):
+    """
+    엄지 TIP이 MCP보다 위에 있고, 수평 편차가 너무 크지 않은 경우
+    """
     dynamic_thresh = calc_dynamic_threshold(hand_landmarks)
-    tip = hand_landmarks.landmark[4]
-    mcp = hand_landmarks.landmark[2]
+    tip = hand_landmarks.landmark[4]   # 엄지 TIP
+    mcp = hand_landmarks.landmark[2]   # 엄지 PIP 대용
     vertical_ok = tip.y < mcp.y - 0.1 * dynamic_thresh
     horizontal_ok = abs(tip.x - mcp.x) < dynamic_thresh
     return vertical_ok and horizontal_ok
 
-
 def classify_gesture_from_states(states, hand_landmarks):
     """
     states = [thumb, index, middle, ring, pinky]
+    엄지만 폈을 때:
+      - thumbs up: is_thumb_up() == True
+      - thumbs down: is_thumb_down() == True
     """
-    # 주먹(FIST) 검사 우선
-    if is_fist_by_distance(hand_landmarks):
-        return Gesture.FIST
-
-    # 엄지만 폈을 때
+    # 오직 엄지만 폈는지 확인
     if states[0] and not any(states[1:]):
         if is_thumb_up(hand_landmarks):
             return Gesture.THUMBS_UP
         if is_thumb_down(hand_landmarks):
             return Gesture.THUMBS_DOWN
 
-    return None
+    # 모두 접혔을 때만 완전 주먹(FIST)
+    if sum(states) == 0:
+        return Gesture.FIST
 
+    return None
 
 def smooth_gesture(raw):
     """히스토리 기반 다수결+연속 3회 안정화"""
@@ -140,7 +126,6 @@ def smooth_gesture(raw):
     if most_common is not None and gesture_history.count(most_common) >= 3:
         return most_common
     return None
-
 
 def detect_gesture(ffmpeg_proc, debug=False):
     frame = read_frame(ffmpeg_proc)
@@ -157,10 +142,6 @@ def detect_gesture(ffmpeg_proc, debug=False):
         label = handedness.classification[0].label
         states = get_finger_states(lm, handedness)
 
-        # 디버그용 출력
-        print(f"[DEBUG] Hand[{i}] {label} states={states}, FistByDist={is_fist_by_distance(lm)}")
-
-        # 제스처 후보 분류
         if all(states):
             candidate = Gesture.PALM
         else:
@@ -168,14 +149,18 @@ def detect_gesture(ffmpeg_proc, debug=False):
 
         raw_gesture = candidate or raw_gesture
 
+        print(f"[INFO] 손[{i}] 방향={label}, 상태={states}, 후보제스처={candidate}")
+
         if debug:
             drawing.draw_landmarks(frame, lm, mp_hands.HAND_CONNECTIONS)
             cv2.putText(frame, f"{label}:{states}",
                         (10, 30 + 30*i),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
 
-    return smooth_gesture(raw_gesture)
+    if debug:
+        pass  # 화면 출력은 헤드리스 환경에선 사용하지 않음
 
+    return smooth_gesture(raw_gesture)
 
 if __name__ == "__main__":
     ffmpeg_proc, cam_proc = start_stream()
@@ -184,7 +169,7 @@ if __name__ == "__main__":
             g = detect_gesture(ffmpeg_proc, debug=True)
             if g:
                 print(f"[STABLE] 확정 제스처: {g.name}")
-                # TODO: 여기에서 모터 제어 로직(팬 ON/OFF) 연결
+                # ⇒ 여기에 모터 제어 로직 연결
     finally:
         ffmpeg_proc.terminate()
         cam_proc.terminate()
