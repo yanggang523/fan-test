@@ -36,7 +36,7 @@ if __name__ == '__main__':
             if gesture == Gesture.THUMBS_UP:
                 dc_motor.start()
                 hold_counter = 0
-            elif gesture == Gesture.THUMBS_DOWN:
+            elif gesture == Gesture.FIST:
                 dc_motor.stop()
                 hold_counter = 0
             elif gesture == Gesture.PALM:
@@ -48,7 +48,7 @@ if __name__ == '__main__':
                 # 1.5초마다 속도 증가 (0.3s × 5)
                 if hold_counter % 5 == 0 and dc_motor.speed < dc_motor.max_speed:
                     dc_motor.increase_speed()
-            elif gesture == Gesture.FIST:
+            elif gesture == Gesture.THUMBS_DOWN:
                 dc_motor.decrease_speed()
                 hold_counter = 0
             else:
@@ -72,7 +72,7 @@ if __name__ == '__main__':
                 if dc_motor.speed  < dc_motor.max_speed:
                     dc_motor.increase_speed()
 
-            time.sleep(0.3)
+            time.sleep(0.1)
 
     except Exception as e:
         print(f"[ERROR] 예외 발생: {e}")
